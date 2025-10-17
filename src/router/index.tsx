@@ -1,46 +1,52 @@
-import { createBrowserRouter, RouterProvider } from 'react-router-dom';
-import {lazy} from 'react';
+import { lazy } from "react";
+import { createHashRouter, RouterProvider } from "react-router-dom";
 
 // 异步加载组件
-const HomePage = lazy(() => import('@/pages/HomePage'));
-const ArticlesPage = lazy(() => import('@/pages/ArticlesPage'));
-const CategoriesPage = lazy(() => import('@/pages/CategoriesPage'));
-const AboutPage = lazy(() => import('@/pages/AboutPage'));
-const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
 const MainLayout = lazy(() => import('@/layouts/MainLayout'));
-
-
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
+const HomePage = lazy(() => import('@/pages/HomePage'));
+const BlogPage = lazy(() => import('@/pages/BlogPage'));
+const NotesPage = lazy(() => import('@/pages/NotesPage'));
+const ProjectsPage = lazy(() => import('@/pages/ProjectsPage'));
+const CodePage = lazy(() => import('@/pages/CodePage'));
 
 // 路由配置
-const router = createBrowserRouter([
+const routes = createHashRouter([
   {
-    path: '/',
-    element: <MainLayout />,
-    errorElement: <NotFoundPage />,
-    children: [
+    path:'/',
+    element:<MainLayout />,
+    errorElement:<NotFoundPage />,
+    children:[
       {
-        index: true,
-        element: <HomePage />,
+        index:true,
+        element:<HomePage />,
       },
       {
-        path: 'articles',
-        element: <ArticlesPage />,
+        path:'blog',
+        element:<BlogPage />,
       },
       {
-        path: 'categories',
-        element: <CategoriesPage />,
+        path:'notes',
+        element:<NotesPage />,
       },
       {
-        path: 'about',
-        element: <AboutPage />,
+        path:'projects',
+        element:<ProjectsPage />,
       },
-    ],
-  },
-]);
-
-// 路由提供者组件
-export const AppRouter: React.FC = () => {
-  return <RouterProvider router={router} />;
-};
-
-export default router;
+      {
+        path:'code',
+        element:<CodePage />,
+      }
+      
+      
+      
+    ]
+  }
+])
+// 导出路由提供者组件,用于在应用中渲染路由
+export const AppRouter: React.FC = () =>{
+  return (
+    <RouterProvider router={routes} />
+  )
+}
+export default routes;

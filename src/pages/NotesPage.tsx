@@ -34,18 +34,18 @@ const PlaceholderText = styled.p`
   line-height: 1.6;
 `;
 
-const ArticlesPage: React.FC = () => {
+const NotesPage: React.FC = () => {
   return (
     <PageContainer>
-      <PageTitle>文章列表</PageTitle>
+      <PageTitle>笔记列表</PageTitle>
       <PlaceholderContent>
         <PlaceholderText>
-          这里将展示所有的技术文章列表。<br />
-          您可以在这里浏览和搜索感兴趣的技术内容。
+          这里将展示所有的笔记。<br />
+          您可以按照不同的主题来浏览笔记。
         </PlaceholderText>
       </PlaceholderContent>
     </PageContainer>
   );
 };
 
-export default ArticlesPage;
+export default NotesPage;

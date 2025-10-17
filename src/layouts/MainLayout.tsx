@@ -1,39 +1,33 @@
-import React from 'react';
-import { Outlet } from 'react-router-dom';
 import styled from '@emotion/styled';
-import { Global } from '@emotion/react';
 import Header from './Header';
 import Footer from './Footer';
-import { globalStyles } from '../styles/global';
-import { theme } from '../styles/theme';
 
-// 应用容器
+import { Outlet } from 'react-router-dom';
+
+// 容器
 const AppContainer = styled.div`
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 `;
-
-// 主内容区域
+// 主要内容容器
 const MainContent = styled.main`
-  flex: 1;
-  background-color: ${theme.colors.backgroundSecondary};
-  min-height: calc(100vh - 200px); // 减去header和footer的大概高度
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  min-height: 100vh;
+  padding: 2rem 0;
 `;
-
-const MainLayout: React.FC = () => {
-  return (
+const MainLayout: React.FC = () =>{
+  return(
     <>
-      <Global styles={globalStyles} />
-      <AppContainer>
-        <Header />
-        <MainContent>
-          <Outlet />
-        </MainContent>
-        <Footer />
-      </AppContainer>
+    <AppContainer>
+      <Header />
+      <MainContent>
+        <Outlet />
+      </MainContent> 
+      <Footer />
+    </AppContainer>
     </>
-  );
-};
-
+  )
+}
 export default MainLayout;

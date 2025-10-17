@@ -34,18 +34,18 @@ const PlaceholderText = styled.p`
   line-height: 1.6;
 `;
 
-const CategoriesPage: React.FC = () => {
+const BlogPage: React.FC = () => {
   return (
     <PageContainer>
-      <PageTitle>文章分类</PageTitle>
+      <PageTitle>文章列表</PageTitle>
       <PlaceholderContent>
         <PlaceholderText>
-          这里将展示所有的文章分类。<br />
-          您可以按照不同的技术栈和主题来浏览文章。
+          这里将展示所有的技术文章列表。<br />
+          您可以在这里浏览和搜索感兴趣的技术内容。
         </PlaceholderText>
       </PlaceholderContent>
     </PageContainer>
   );
 };
 
-export default CategoriesPage;
+export default BlogPage;
