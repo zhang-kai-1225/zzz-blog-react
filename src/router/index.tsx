@@ -4,7 +4,7 @@ import { createHashRouter, RouterProvider } from "react-router-dom";
 // 异步加载组件
 const MainLayout = lazy(() => import('@/layouts/MainLayout'));
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'));
-const HomePage = lazy(() => import('@/pages/HomePage'));
+const Home = lazy(() => import('@/pages/index/home'));
 const BlogPage = lazy(() => import('@/pages/BlogPage'));
 const NotesPage = lazy(() => import('@/pages/NotesPage'));
 const ProjectsPage = lazy(() => import('@/pages/ProjectsPage'));
@@ -19,7 +19,7 @@ const routes = createHashRouter([
     children:[
       {
         index:true,
-        element:<HomePage />,
+        element: <Home />,
       },
       {
         path:'blog',

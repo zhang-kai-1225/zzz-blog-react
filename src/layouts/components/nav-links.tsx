@@ -1,5 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import styled from '@emotion/styled';
+import type { RefObject } from 'react';
+import { motion } from 'framer-motion';
 // 导航菜单接口定义
 interface MainItem {
   title: string;
@@ -16,38 +18,41 @@ interface NavLinksProps {
   onLinkClick: () => void;
   moreDropdownOpen: boolean;
   toggleMoreDropdown: (e: React.MouseEvent<Element, MouseEvent>) => void;
+  dropdownRef: RefObject<HTMLDivElement>;
 }
 
 const NavLink = styled(Link) <{ active: string }>`
-  position: relative;
+    position: relative;
   display: flex;
   align-items: center;
-  gap:8px;
+  gap: 8px;
   padding: 0.5rem 0.75rem;
   margin: 0 0.5rem;
   font-size: 0.95rem;
-  font-weight: ${(props) => props.active === 'true' ? '600' : '500'};
-  color: ${(props) => props.active === 'true' ? 'var(--accent-color)' : 'var(--text-secondary)'};
-  transition: all 0.3s ease;
+  font-weight: ${(props) => (props.active === 'true' ? '600' : '500')};
+  color: ${(props) => (props.active === 'true' ? 'var(--accent-color)' : 'var(--text-secondary)')};
+  transition: all 0.2s ease;
   cursor: pointer;
   border-radius: 8px;
   white-space: nowrap;
-    &:hover {
+
+  &:hover {
     color: var(--accent-color);
   }
+
   svg {
     opacity: ${(props) => (props.active === 'true' ? '1' : '0')};
-    /* 图标显示/隐藏的过渡动画：0.2s 平滑变化 */
     transition: opacity 0.2s ease;
   }
+
   &:hover svg {
-    opacity: 0.5; 
+    opacity: 0.5;
   }
 `
 // 下拉菜单
-const DropdownContent = styled.div`
+const DropdownContent = styled(motion.div)`
   position: absolute;
-  top: calc(100% + 0.5rem); // 100% 表示与父容器的底部对齐，+ 0.5rem 表示在父容器底部下方再留出 
+  top: calc(100% + 0.5rem); 
   right: 0;
   width: 220px;
   background: var(--bg-primary);
@@ -55,6 +60,10 @@ const DropdownContent = styled.div`
   overflow: hidden;
   z-index: 100;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  [data-theme='dark'] & {
+    background: var(--bg-secondary);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  }
 
 `
 // 下拉菜单项
@@ -69,12 +78,42 @@ const DropdownItem = styled(Link)`
     background: var(--bg-secondary);
     color: var(--text-primary);
   }
+  [data-theme='dark'] &:hover {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  svg {
+    opacity: 1;
+  }
 `
+// 下拉菜单动画变体
+const dropdownVariants = {
+  hidden: { opacity: 0, y: -10, scale: 0.95 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      duration: 0.2,
+      ease: [0.4, 0, 0.2, 1] as any,
+    },
+  },
+  exit: {
+    opacity: 0,
+    y: -10,
+    scale: 0.95,
+    transition: {
+      duration: 0.15,
+      ease: [0.4, 0, 1, 1] as any,
+    },
+  },
+};
 const NavLinks: React.FC<NavLinksProps> = ({
   mainNavItems,
   onLinkClick,
   moreDropdownOpen,
   toggleMoreDropdown,
+  dropdownRef,
 }) => {
   const location = useLocation();
   // 检查当前路径是否与导航项路径匹配
@@ -93,7 +132,7 @@ const NavLinks: React.FC<NavLinksProps> = ({
         if (item.isDropdown && item.children) {
           return (
             /* 下拉菜单的外层容器，为下拉内容提供参考定位点 */
-            <div key={item.path} style={{ position: 'relative' }}>
+            <div key={item.path} ref={dropdownRef} style={{ position: 'relative' }}>
               <NavLink
                 to='#'
                 active={`${isItemActive(item)}`}
@@ -107,7 +146,12 @@ const NavLinks: React.FC<NavLinksProps> = ({
               </NavLink>
               {/* 下拉菜单内容 */}
               {moreDropdownOpen && (
-                <DropdownContent>
+                <DropdownContent
+                  initial="hidden"
+                  animate="visible"
+                  exit="exit"
+                  variants={dropdownVariants}
+                >
                   {
                     item.children.map((child) => (
                       <DropdownItem key={child.path} to={child.path} onClick={onLinkClick}>

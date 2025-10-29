@@ -2,9 +2,11 @@
 import styled from "@emotion/styled";
 import { AnimatePresence, motion, type Variants } from 'framer-motion';
 import { useDispatch, useSelector } from 'react-redux';
-import { toggleTheme } from '@/store/modules/themeSlice';
+import { cycleTheme } from '@/store/modules/themeSlice';
 import type { RootState } from '@/store';
-import { FiMoon, FiSun } from "react-icons/fi";
+import { FiMoon, FiSun, FiMonitor } from "react-icons/fi";
+import { useRef, useState } from "react";
+import { getElementCenter } from "@/utils/theme-transition";
 // 主题切换容器
 const ThemeToggleContainer = styled(motion.div)`
     position: relative;
@@ -30,6 +32,18 @@ const ThemeToggleButton = styled(motion.button)`
     transition: all 0.2s ease;
     position: relative;
     z-index: 2;
+    /* 增强悬停效果 */
+    &:hover {
+        transform: rotate(15deg);
+    }
+    &:active {
+        transform:scale(0.9) rotate(15deg);
+    }
+    /* 禁用状态下的样式（防止动画期间重复点击） */
+    &:disabled {
+        cursor: not-allowed;
+        opacity: 0.6;
+    }
 `
 // 图标容器 用于包裹图标和相应的样式
 const IconContainer = styled(motion.div)`
@@ -61,6 +75,40 @@ const SunRays = styled(motion.div)`
 const ThemeToggle: React.FC = () => {
     const dispatch = useDispatch();
     const theme = useSelector((state: RootState) => state.theme.theme);
+    const mode = useSelector((state: RootState) => state.theme.mode);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    const [isTransitioning, setIsTransitioning] = useState(false);
+
+    const getAriaLabel = () => {
+        switch (mode) {
+            case 'light':
+                return '当前：浅色模式，点击切换到深色模式';
+            case 'dark':
+                return '当前：深色模式，点击切换到自动模式';
+            case 'auto':
+                return `当前：自动模式（${theme === 'dark' ? '深色' : '浅色'}），点击切换到浅色模式`;
+            default:
+                return '切换主题';
+        }
+    }
+    // 处理主题切换
+    const handleToggle = async () => {
+        // 防止动画期间重复点击
+        if (isTransitioning) return;
+        setIsTransitioning(true);
+        // 获取按钮中心元素作为动画起点
+        const center = buttonRef.current ? getElementCenter(buttonRef.current) : undefined;
+        try {
+            // 使用动画切换主题
+            await dispatch(cycleTheme({
+                x: center?.x,
+                y: center?.y,
+                duration: 800,
+            }) as any);
+        } finally {
+            setTimeout(() => setIsTransitioning(false), 100);
+        }
+    }
     // 太阳动画变体
     const sunVariants: Variants = {
         initial: {
@@ -138,19 +186,50 @@ const ThemeToggle: React.FC = () => {
             },
         },
     };
+    // 自动模式动画变体
+    const autoVariants = {
+        initial: {
+            scale: 0.8,
+            opacity: 0,
+            rotate: -90,
+        },
+        animate: {
+            scale: 1,
+            opacity: 1,
+            rotate: 0,
+            transition: {
+                duration: 0.5,
+                ease: 'easeInOut' as any,
+            },
+        },
+        exit: {
+            scale: 0.8,
+            opacity: 0,
+            rotate: 90,
+            transition: {
+                duration: 0.5,
+                ease: 'easeInOut' as any,
+            },
+        },
+    };
     return (
         <ThemeToggleContainer>
-            <ThemeToggleButton onClick={() => dispatch(toggleTheme())}>
+            <ThemeToggleButton onClick={handleToggle} ref={buttonRef} disabled={isTransitioning} aria-label={getAriaLabel()} title={getAriaLabel()} whileHover={{ scale: isTransitioning ? 1 : 1.1 }}
+                whileTap={{ scale: isTransitioning ? 1 : 0.9 }} > 
                 <AnimatePresence mode="wait">
-                    {theme === 'dark' ? (
+                    {mode === 'light' ? (
                         <IconContainer key="sun" variants={sunVariants} initial="initial" animate="animate" exit="exit">
                             <FiSun size={20} />
                             <SunRays variants={raysVariants} initial="initial" animate="animate" exit="exit" />
                         </IconContainer>
-                    ) : (
+                    ) : mode === 'dark' ? (
                         <IconContainer key="moon" variants={moonVariants} initial="initial" animate="animate" exit="exit">
                             <FiMoon size={20} />
                         </IconContainer>
+                        ) : (
+                            <IconContainer key="auto" variants={autoVariants} initial="initial" animate="animate" exit="exit">
+                                <FiMonitor size={20} />
+                            </IconContainer>
                     )}
                 </AnimatePresence>
             </ThemeToggleButton>

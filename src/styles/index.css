@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono&family=Fira+Code&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 @import './rich-text.css';
@@ -8,10 +8,19 @@
  */
 :root {
   /* 字体系统 */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-sans:
+      'Manrope', 'Manrope Fallback', system-ui, -apple-system, PingFang SC, 'Microsoft YaHei', Segoe UI, Roboto,
+      Helvetica, 'noto sans sc', 'hiragino sans gb', 'sans-serif', 'Apple Color Emoji', 'Segoe UI Emoji',
+      'Not Color Emoji';
   --font-code:
-    'JetBrainsMono', 'Fira code Retina', 'Fira code', Consolas, Monaco, 'Hannotate SC', monospace, -apple-system;
-  --font-press-start: 'Press Start 2P', 'Courier New', monospace;
+    'JetBrainsMono',
+      'Fira code Retina',
+      'Fira code',
+      Consolas,
+      Monaco,
+      'Hannotate SC',
+      monospace,
+      -apple-system;
 
   /* 颜色系统 - 亮色模式 */
   --text-primary: #252525; /* 主文本颜色 */
@@ -78,7 +87,8 @@
 
   /* 尺寸和间距 */
   --header-height: 60px; /* 头部高度 */
-  --max-width: 1120px; /* 最大宽度 */
+  --max-width: 1280px;
+    /* 最大宽度 */
   --content-width: 860px; /* 内容宽度 */
   --sidebar-width: 260px; /* 侧边栏宽度 */
 
@@ -182,7 +192,96 @@
 }
 
 /**
- * 主题过渡效果
+ * View Transitions API - 主题切换动画 * 实现圆形扩散效果，从点击位置开始扩散 */
+
+ /* 定义动画变量 */
+ :root {
+   --theme-transition-duration: 800ms;
+   --theme-transition-x: 50%;
+   --theme-transition-y: 50%;
+   --theme-transition-radius: 100vmax;
+ }
+
+ /* View Transition 容器 - 控制整个过渡的容器背景 */
+ ::view-transition-group(root) {
+   animation-duration: var(--theme-transition-duration);
+   animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+ }
+
+ /* 为整个文档启用 view transition */
+ ::view-transition-old(root),
+ ::view-transition-new(root) {
+   /* 移除默认的交叉淡入淡出动画，使用自定义动画 */
+   animation-duration: var(--theme-transition-duration);
+   animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+   mix-blend-mode: normal;
+   /* 不设置背景，让内容的真实背景显示 */
+   overflow: hidden;
+ }
+
+ /* 旧视图（当前主题）的动画 - 保持完整显示直到被新视图覆盖 */
+ ::view-transition-old(root) {
+   z-index: 1;
+   /* 旧视图保持完整，不做裁剪，只在最后淡出 */
+   animation-name: theme-fade-out;
+ }
+
+ /* 新视图（新主题）的动画 - 圆形扩散出现 */
+ ::view-transition-new(root) {
+   z-index: 2;
+   /* 新视图从点击位置圆形扩散 */
+   animation-name: theme-circle-expand;
+ }
+
+ /* 圆形扩散动画关键帧 */
+ @keyframes theme-circle-expand {
+   from {
+     clip-path: circle(0px at var(--theme-transition-x) var(--theme-transition-y));
+   }
+
+   to {
+     clip-path: circle(var(--theme-transition-radius) at var(--theme-transition-x) var(--theme-transition-y));
+   }
+ }
+
+ /* 旧视图淡出动画 - 保持完整直到最后 */
+ @keyframes theme-fade-out {
+   from {
+     opacity: 1;
+   }
+
+   to {
+     opacity: 1;
+   }
+ }
+
+ /**
+ * 降级方案 - 不支持 View Transitions API 的浏览器使用普通过渡
+ */
+ @supports not (view-transition-name: none) {
+   html {
+     transition:
+       color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+       background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+   }
+
+   body {
+     transition:
+       color 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+       background-color 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+   }
+
+   * {
+     transition:
+       color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+       background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+       border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+       box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+   }
+ }
+
+ /**
+ * 主题过渡效果（旧版，保留作为降级）
  */
 .theme-transition {
   transition:
@@ -217,15 +316,14 @@ html {
   scroll-behavior: smooth;
   letter-spacing: -0.01em;
   height: auto;
+  /* 禁用移动端双指缩放 */
+    touch-action: pan-y pan-x;
 }
 
 body {
   font-family: var(--font-sans);
   color: var(--text-primary);
   background-color: var(--bg-primary);
-  transition:
-    background-color 0.3s ease,
-    color 0.3s ease;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size: 15px;
@@ -235,6 +333,8 @@ body {
   letter-spacing: -0.01em;
   height: auto;
   overflow-x: hidden;
+  /* 禁用移动端双指缩放 */
+    touch-action: pan-y pan-x;
 }
 
 #root {
@@ -333,9 +433,17 @@ pre,
   right: 0;
   z-index: 100;
   height: var(--header-height);
-  transition: all 0.3s var(--bezier-smooth);
+  /* 使用弹簧动画 */
+    transition:
+      background-color 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+      backdrop-filter 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+      box-shadow 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+      border-radius 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   border-radius: 0 0 24px 24px;
   background: transparent;
+  /* GPU加速 */
+    transform: translateZ(0);
+    will-change: background-color, backdrop-filter;
 }
 
 .underline {
@@ -347,23 +455,31 @@ pre,
   height: 2px;
   background: linear-gradient(to right, var(--underline-bg));
   opacity: 1;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* 滚动后的状态毛玻璃效果 */
 .header.scrolled {
+  background: rgba(255, 255, 255, 0.85);
   backdrop-filter: saturate(180%) blur(20px);
-  box-shadow: 0 6px 32px 0 rgba(var(--accent-rgb), 0.1);
+  box-shadow:
+      0 4px 16px 0 rgba(var(--accent-rgb), 0.08),
+      0 2px 8px 0 rgba(0, 0, 0, 0.04),
+      0 0 0 1px rgba(0, 0, 0, 0.02);
+    border-radius: 0 0 24px 24px;
 }
 
+/* 暗色模式滚动后状态 */
 [data-theme='dark'] .header.scrolled {
-  background: rgba(15, 15, 15, 0.85); /* 更深的背景 */
-  backdrop-filter: saturate(180%) blur(20px); /* 增强毛玻璃效果 */
+  background: rgba(15, 15, 15, 0.85);
+    backdrop-filter: saturate(180%) blur(20px);
   box-shadow:
     0 6px 24px 0 rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.08),
-    0 2px 8px 0 rgba(var(--accent-rgb), 0.2); /* 多层阴影 + 发光效果 */
+    0 2px 8px 0 rgba(var(--accent-rgb), 0.2);
 }
 
+/* 导航胶囊 - 核心动画元素 */
 .nav-card {
   display: flex;
   align-items: center;
@@ -371,72 +487,146 @@ pre,
   border-radius: 28px;
   padding: 0.3rem 1.25rem;
   height: 44px;
-  transition: all 0.3s var(--bezier-smooth);
   position: relative;
   z-index: 60;
-  background: rgba(255, 255, 255, 0.98);
-  /* 使用动态主题色阴影（降级为硬编码蓝色） */
-  box-shadow:
-    0 4px 8px 0 rgba(0, 0, 0, 0.1),
-    0 8px 24px 0 rgba(var(--accent-rgb, 81, 131, 245), 0.3);
-  backdrop-filter: blur(16px);
   margin-left: auto;
+  
+    /* 初始胶囊状态 - 浮动效果 */
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow:
+    0 4px 12px 0 rgba(0, 0, 0, 0.08),
+      0 8px 32px 0 rgba(var(--accent-rgb, 81, 131, 245), 0.25),
+      0 0 0 1px rgba(var(--accent-rgb, 81, 131, 245), 0.1),
+      0 1px 2px 0 rgba(var(--accent-rgb, 81, 131, 245), 0.15);
+  backdrop-filter: blur(16px);
+/* 高性能动画 - 丝滑的缓动曲线 */
+  transition:
+    background-color 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    border-radius 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    backdrop-filter 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.7s cubic-bezier(0.4, 0, 0.1, 1);
+  /* 丝滑的减速曲线 */
+
+  /* GPU加速 */
+  transform: translateZ(0) scale(1);
+  transform-origin: center center;
+  will-change: background-color, box-shadow, border-radius, transform;
 }
 
+/* 暗色模式胶囊 - 增强发光效果 */
 [data-theme='dark'] .nav-card {
   background: rgba(26, 26, 26, 0.98);
   box-shadow:
     0 8px 32px 0 rgba(0, 0, 0, 0.6),
     0 0 0 1px rgba(255, 255, 255, 0.1),
-    0 4px 16px 0 rgba(var(--accent-rgb, 123, 136, 216), 0.5);
+    0 4px 16px 0 rgba(var(--accent-rgb, 123, 136, 216), 0.5),
+      0 0 56px 0 rgba(var(--accent-rgb, 123, 136, 216), 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+/* 滚动后胶囊融入 header - 丝滑过渡 + 轻柔下沉效果 */
 .header.scrolled .nav-card {
   background: transparent;
   box-shadow: none;
-  border: none;
   backdrop-filter: none;
+  border-radius: 0;
+    opacity: 1;
+    /* 更轻微的下沉和收缩，减少生硬感 */
+    transform: translateZ(0) translateY(4px) scale(0.99);
 }
 
+/* 暗色模式滚动后 */
 [data-theme='dark'] .header.scrolled .nav-card {
   background: transparent;
   box-shadow: none;
-  border: none;
   backdrop-filter: none;
+  transform: translateZ(0) translateY(4px) scale(0.99);
 }
 
 /* 导航链接悬停效果 */
 .nav-link-hover {
   position: relative;
   z-index: 1;
+  transition: color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .nav-link-hover:hover {
+    color: var(--text-primary);
+    transform: translateY(-1px);
+  }
+  
+  /* 轻柔的胶囊悬浮动画 - 自然呼吸感 */
+  @keyframes floatGentle {
+  
+    0%,
+    100% {
+      transform: translateZ(0) translateY(0);
+    }
+  
+    50% {
+      transform: translateZ(0) translateY(-2px);
+    }
+  }
+  
+  /* 未滚动时胶囊有微妙的浮动效果 */
+  .header:not(.scrolled) .nav-card {
+    animation: floatGentle 4s ease-in-out infinite;
+  }
+  
+  /* 滚动时停止浮动动画，应用下沉变换 */
+  .header.scrolled .nav-card {
+    animation: none;
+    /* 下沉效果在上面的样式中定义 */
 }
 
-.nav-link-hover .bg-effect {
+/* 鼠标跟随聚光灯效果  */
+.header:not(.scrolled) .nav-card::before {
   content: '';
   position: absolute;
-  top: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 140%;
-  height: 100%;
+  inset: 0;
+    border-radius: 28px;
+    /* 使用 CSS 变量实现精确的鼠标跟随 */
   background: radial-gradient(
-    ellipse 70% 100% at 50% 50%,
-    transparent 0%,
-    var(--spotlight-color) 20%,
-    transparent 100%
+    200px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+      var(--spotlight-color) 0%,
+      transparent 65%
   );
-  z-index: -1;
-  border-radius: 10px;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  z-index: -1;
+  /* 无过渡，让 JS 动画更流畅 */
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
 }
 
-.nav-link-hover:hover .bg-effect {
+/* 悬停时显示聚光灯 */
+.header:not(.scrolled) .nav-card:hover::before {
   opacity: 1;
 }
 
-.nav-link-hover:hover {
-  color: var(--text-primary);
+/* 暗色模式聚光灯颜色调整 */
+[data-theme='dark'] .header:not(.scrolled) .nav-card::before {
+  background: radial-gradient(220px circle at var(--spotlight-x, 50%) var(--spotlight-y, 50%),
+      var(--spotlight-color) 0%,
+      transparent 65%);
+}
+
+/* Header 内容在滚动时的微妙过渡 */
+.header .HeaderContainer>* {
+  transition:
+    transform 0.5s cubic-bezier(0.23, 1, 0.32, 1),
+    opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Logo 区域的协调动画 - 与胶囊形成层次感 */
+.header:not(.scrolled) .HeaderContainer>div:first-child {
+  transform: scale(1);
+}
+
+/* 滚动时 Logo 区域轻微缩小并下沉 - 与胶囊 4px 形成协调比例 */
+.header.scrolled .HeaderContainer>div:first-child {
+  transform: translateY(2px) scale(0.99);
 }
 
 /* 移动端导航样式 */
