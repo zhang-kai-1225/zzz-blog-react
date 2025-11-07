@@ -3,6 +3,8 @@ import { motion } from "framer-motion";
 import { useAnimationEngine } from "@/utils/animation-engine";
 import { FiCode } from "react-icons/fi";
 import { Icon } from "@/components/common/Icon";
+import { useEffect, useState } from "react";
+import API from "@/utils/api";
 
 const PageContainer = styled.div`
   width: 100%;
@@ -231,6 +233,20 @@ const SociaLink = styled(motion.a)`
 const Home: React.FC = () => {
     // 使用动画引擎
     const { variants } = useAnimationEngine();
+    // 文章和手记数据
+    const [articles, setArticles] = useState<any[]>([]);
+    // 加载文章列表
+    const loadArticles = async () => {
+        try {
+            const response = await API.article.getArticles({ page: 1, limit: 3 });
+            setArticles(response.data || []);
+        } catch (error) {
+            console.error('加载文章失败:', error);
+        }
+    };
+    useEffect(() => {
+        loadArticles();
+    }, []);
     return (
         <>
             <PageContainer>

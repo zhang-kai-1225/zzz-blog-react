@@ -1,5 +1,6 @@
 import { data } from 'react-router-dom';
 import http from './http';
+import type { ApiResponse, PaginationParams, PaginationResult } from './type';
 export interface LoginParams {
     username: string;
     password: string;
@@ -65,6 +66,31 @@ export interface ChangePasswordParams {
     newPassword: string;
     confirmPassword: string;
 }
+
+/**
+ * 文章相关接口类型定义
+ */
+export interface Article {
+    id: string | number;
+    title: string;
+    content: string;
+    summary?: string;
+    cover?: string;
+    categoryId?: number;
+    tags?: string[];
+    author?: string | UserInfo;
+    createTime?: string;
+    updateTime?: string;
+    viewCount?: number;
+    [key: string]: any;
+}
+
+export interface ArticleParams extends PaginationParams {
+    categoryId?: number;
+    tag?: string;
+    keyword?: string;
+    authorId?: string | number;
+}
 export const API = {
     // 用户相关Api
     user: {
@@ -87,6 +113,20 @@ export const API = {
             formData.append('avatar', file);
             return http.upload('/users/avatar', formData)
         }
-    }
+    },
+    // 博客文章相关
+    article: {
+        /**
+         * 获取公开文章列表（前台展示）
+         * 返回所有已发布且审核通过的文章
+         * @param params 查询参数
+         * @returns Promise<ApiResponse<PaginationResult<Article>>>
+         */
+        getArticles: (params?: ArticleParams): Promise<ApiResponse<PaginationResult<Article>>> => {
+            return http.get('/posts', params);
+        },
+
+    },
+
 }
 export default API;
