@@ -1,4 +1,5 @@
 import type { AppDispatch, RootState } from "@/store";
+import { register } from "@/store/modules/userSlice";
 import styled from "@emotion/styled";
 import { Input, Modal } from "adnaan-ui";
 import { useState } from "react";
@@ -118,8 +119,8 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
     const [formData, setFormData] = useState({
         username: '',
         password: '',
-        confirmPassword: '',
-        email: '',
+      email: '',
+      confirmPassword: '',
     });
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({
@@ -127,11 +128,31 @@ const RegisterModal: React.FC<RegisterModalProps> = ({ isOpen, onClose, onSwitch
             [e.target.name]: e.target.value,
         });
     };
+  // 注册表单提交
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (formData.password !== formData.confirmPassword) {
+      adnaan.toast.error('两次输入密码不一致', '请检查');
+      return;
+    }
+    // 验证密码长度
+    if (formData.password.length < 6) {
+      adnaan.toast.error('密码长度不能小于6位', '请检查');
+      return;
+    }
+    // 执行注册，成功后关闭模态框
+    // 执行注册，成功后关闭模态框
+    await dispatch(
+      register(formData.username, formData.email, formData.password, formData.confirmPassword, () => {
+        onClose();
+      }),
+    );
+  }
     return (
         <Modal isOpen={isOpen} onClose={onClose}>
             <ModalContent>
                 <Title>注册</Title>
-                <Form>
+          <Form onSubmit={handleSubmit}>
                     <Input
                         type="text"
                         name="username"
