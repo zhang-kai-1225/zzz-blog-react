@@ -1,5 +1,13 @@
-import type { Variants } from "framer-motion";
-import { useCallback, useEffect, useMemo, useState } from "react";
+/**
+ * Adnaan Animation Engine v3.1
+ * 统一动画管理，性能优先
+ */
+
+import { useInView, useAnimation } from 'framer-motion';
+import type { Variants, Transition } from 'framer-motion';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+
+// ==================== 类型定义 ====================
 
 export interface PerformanceMetrics {
     fps: number;
@@ -9,162 +17,197 @@ export interface PerformanceMetrics {
     devicePixelRatio: number;
     prefersReducedMotion: boolean;
     connectionType: string;
-    level: 'ultra' | 'high' | 'medium' | 'low' | 'minimal'
+    level: 'ultra' | 'high' | 'medium' | 'low' | 'minimal';
 }
+
 export interface AnimationConfig {
     duration: number;
     ease: readonly number[] | string | { type: string;[key: string]: any };
     delay?: number;
     stagger?: number;
 }
-// 性能监控器类: 单例模式（全局唯一实例， 避免重复监控浪费资源）
-class PerformanceMonitor {
-    // 1. 静态属性：存储全局唯一实例（单例核心）
-    private static instance: PerformanceMonitor;
-    // 2. 实例属性：存储性能指标数据（初始为null，后续初始化）
-    private metrics: PerformanceMetrics | null = null;
-    // 3. 实例属性：存储最近100帧的FPS历史（用于计算平均FPS）
-    private fpsHistory: number[] = [];
-    // 4. 实例属性：记录上一帧的时间（用于计算帧间隔）
-    private lastFrameTime = performance.now();
-    // 5. 实例属性：帧计数器（每60帧更新一次性能等级，约1秒）
-    private frameCount = 0;
-    // 6. 实例属性：requestAnimationFrame的ID（用于后续取消监控，避免内存泄漏）
-    private rafId: number | null = null;
-    // 私有构造函数：禁止外部直接new（单例模式核心，确保只能通过getInstance创建）
-    private constructor() {
-        this.startMonitoring(); // 构造函数执行时，立即开始性能监控
+
+// ==================== Hydration 检测器 ====================
+
+let isHydrationComplete = false;
+let hydrationCallbacks: (() => void)[] = [];
+
+export const markHydrationComplete = () => {
+    isHydrationComplete = true;
+    hydrationCallbacks.forEach((cb) => cb());
+    hydrationCallbacks = [];
+};
+
+export const getIsHydrationComplete = () => isHydrationComplete;
+
+export const onHydrationComplete = (callback: () => void) => {
+    if (isHydrationComplete) {
+        callback();
+    } else {
+        hydrationCallbacks.push(callback);
     }
-    // 静态方法：对外提供全局唯一实例（单例入口）
+    return () => {
+        hydrationCallbacks = hydrationCallbacks.filter((cb) => cb !== callback);
+    };
+};
+
+export const HydrationDetector = () => {
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            markHydrationComplete();
+        }, 2000);
+        return () => clearTimeout(timer);
+    }, []);
+    return null;
+};
+
+// ==================== 性能监控器 (优化版) ====================
+
+class PerformanceMonitor {
+    private static instance: PerformanceMonitor;
+    private metrics: PerformanceMetrics | null = null;
+    private fpsHistory: number[] = [];
+    private lastFrameTime = performance.now();
+    private frameCount = 0;
+    private rafId: number | null = null;
+    private updateCallbacks = new Set<(metrics: PerformanceMetrics) => void>();
+
+    private constructor() {
+        this.startMonitoring();
+    }
+
     static getInstance(): PerformanceMonitor {
-        if (!PerformanceMonitor.instance) { // 如果实例不存在，创建新实例
+        if (!PerformanceMonitor.instance) {
             PerformanceMonitor.instance = new PerformanceMonitor();
         }
-        return PerformanceMonitor.instance; // 存在则直接返回
+        return PerformanceMonitor.instance;
     }
 
-    // 私有方法：开始监控FPS（核心逻辑）
     private startMonitoring() {
-        // 定义「每帧执行的函数」：计算当前FPS并更新历史
         const measureFPS = () => {
-            const now = performance.now(); // 获取当前时间（毫秒，高精度）
-            const delta = now - this.lastFrameTime; // 计算上一帧到当前帧的时间差（帧间隔）
+            const now = performance.now();
+            const delta = now - this.lastFrameTime;
 
-            // 如果帧间隔>0（避免除以0），计算当前FPS并加入历史
             if (delta > 0) {
-                const fps = 1000 / delta; // FPS = 1000毫秒 / 帧间隔（如16.67ms间隔=60FPS）
+                const fps = 1000 / delta;
                 this.fpsHistory.push(fps);
 
-                // 只保留最近100帧的FPS（避免数据堆积，节省内存）
+                // 只保留最近100帧
                 if (this.fpsHistory.length > 100) {
-                    this.fpsHistory.shift(); // 删除最旧的一帧数据
+                    this.fpsHistory.shift();
                 }
             }
 
-            // 更新上一帧时间和帧计数器
             this.lastFrameTime = now;
             this.frameCount++;
 
-            // 每60帧（约1秒）更新一次性能等级（避免频繁计算）
+            // 每60帧更新一次性能等级
             if (this.frameCount % 60 === 0) {
                 this.updatePerformanceLevel();
             }
 
-            // 继续监控下一帧（浏览器动画专用API，确保与屏幕刷新同步）
             this.rafId = requestAnimationFrame(measureFPS);
         };
 
-        // 启动第一帧监控
         this.rafId = requestAnimationFrame(measureFPS);
     }
 
-    // 私有方法：根据平均FPS更新性能等级
     private updatePerformanceLevel() {
-        if (!this.metrics) return; // 如果性能指标未初始化，直接返回
+        if (!this.metrics) return;
 
-        const avgFPS = this.getAverageFPS(); // 获取最近100帧的平均FPS
-        const oldLevel = this.metrics.level; // 记录旧的性能等级
+        const avgFPS = this.getAverageFPS();
+        const oldLevel = this.metrics.level;
 
-        // 根据平均FPS动态调整性能等级（原代码逻辑）
+        // 动态调整性能等级
         if (avgFPS >= 55) {
-            this.metrics.level = 'ultra'; // 顶级：≥55FPS（如高端手机/电脑）
+            this.metrics.level = 'ultra';
         } else if (avgFPS >= 45) {
-            this.metrics.level = 'high'; // 高端：45-54FPS
+            this.metrics.level = 'high';
         } else if (avgFPS >= 30) {
-            this.metrics.level = 'medium'; // 中端：30-44FPS
+            this.metrics.level = 'medium';
         } else if (avgFPS >= 20) {
-            this.metrics.level = 'low'; // 低端：20-29FPS
+            this.metrics.level = 'low';
         } else {
-            this.metrics.level = 'minimal'; // 最差：<20FPS（如老旧设备）
+            this.metrics.level = 'minimal';
         }
 
-        // 如果性能等级变化，打印日志（便于开发调试）
+        // 如果性能等级改变，通知所有订阅者
         if (oldLevel !== this.metrics.level) {
             console.log(`[Animation Engine] Performance level changed: ${oldLevel} → ${this.metrics.level}`);
+            this.notifySubscribers();
         }
     }
 
-    // 公有方法：计算最近100帧的平均FPS
+    // 订阅性能变化
+    subscribe(callback: (metrics: PerformanceMetrics) => void) {
+        this.updateCallbacks.add(callback);
+        return () => {
+            this.updateCallbacks.delete(callback);
+        };
+    }
+
+    private notifySubscribers() {
+        if (this.metrics) {
+            this.updateCallbacks.forEach((callback) => callback(this.metrics!));
+        }
+    }
+
     getAverageFPS(): number {
-        if (this.fpsHistory.length === 0) return 60; // 初始无数据时，默认60FPS
-        // 求和后除以帧数，得到平均值
+        if (this.fpsHistory.length === 0) return 60;
         return this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
     }
 
-    // 公有方法：获取完整性能指标（首次调用时初始化）
     getMetrics(): PerformanceMetrics {
-        if (this.metrics) return this.metrics; // 已初始化则直接返回
+        if (this.metrics) return this.metrics;
 
-        // 1. 初始化：检测用户是否开启「减少动画」模式（无障碍设置，原代码逻辑）
+        // 初始化性能指标
         const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-        // 2. 初始化：检测设备是否支持WebGL（优化版，避免内存泄漏）
+        // WebGL检测（优化版，防内存泄漏）
         let hasWebGL = false;
         try {
-            const canvas = document.createElement('canvas'); // 创建临时canvas元素
-            // 尝试获取WebGL2或WebGL上下文（failIfMajorPerformanceCaveat：排除性能差的设备）
+            const canvas = document.createElement('canvas');
             const gl =
                 canvas.getContext('webgl2', { failIfMajorPerformanceCaveat: true }) ||
                 canvas.getContext('webgl', { failIfMajorPerformanceCaveat: true });
-            hasWebGL = !!gl; // 有上下文则支持WebGL
+            hasWebGL = !!gl;
 
-            // 立即释放WebGL上下文（避免内存泄漏，原代码优化点）
+            // 立即释放WebGL上下文
             if (gl) {
                 const ext = (gl as WebGLRenderingContext).getExtension('WEBGL_lose_context');
-                if (ext) ext.loseContext(); // 主动释放上下文
+                if (ext) ext.loseContext();
             }
-            canvas.width = canvas.height = 0; // 清空canvas尺寸，释放资源
+            // 清理Canvas引用
+            canvas.width = canvas.height = 0;
         } catch (e) {
-            hasWebGL = false; // 捕获异常，标记为不支持
+            hasWebGL = false;
         }
 
-        // 3. 初始化：获取CPU核心数、内存（部分浏览器不支持，用默认值）
-        const cores = navigator.hardwareConcurrency || 4; // 默认为4核
-        const memory = (navigator as any).deviceMemory || 4; // 默认为4GB（原代码类型断言）
-        const devicePixelRatio = window.devicePixelRatio || 1; // 默认为1（普通屏）
+        const cores = navigator.hardwareConcurrency || 4;
+        const memory = (navigator as any).deviceMemory || 4;
+        const devicePixelRatio = window.devicePixelRatio || 1;
 
-        // 4. 初始化：检测网络连接类型（兼容性处理，原代码逻辑）
+        // 检测网络连接类型
         const connection =
             (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
-        const connectionType = connection?.effectiveType || '4g'; // 默认为4g
+        const connectionType = connection?.effectiveType || '4g';
 
-        // 5. 初始化：计算初始性能等级（结合硬件+系统设置）
-        let level: PerformanceMetrics['level'] = 'medium'; // 默认中端
+        // 计算初始性能等级
+        let level: PerformanceMetrics['level'] = 'medium';
         if (prefersReducedMotion) {
-            level = 'minimal'; // 开启减少动画，直接最低级
+            level = 'minimal';
         } else if (hasWebGL && cores >= 8 && memory >= 8 && devicePixelRatio <= 2) {
-            level = 'ultra'; // 顶级：支持WebGL+8核+8GB内存+非超高清屏
+            level = 'ultra';
         } else if (hasWebGL && cores >= 4 && memory >= 4) {
-            level = 'high'; // 高端：支持WebGL+4核+4GB内存
+            level = 'high';
         } else if (cores >= 2 && memory >= 2) {
-            level = 'medium'; // 中端：2核+2GB内存
+            level = 'medium';
         } else {
-            level = 'low'; // 低端：低于上述配置
+            level = 'low';
         }
 
-        // 6. 赋值性能指标并返回（与接口字段完全匹配）
         this.metrics = {
-            fps: 60, // 初始默认60FPS
+            fps: 60,
             memory,
             cores,
             hasWebGL,
@@ -177,20 +220,25 @@ class PerformanceMonitor {
         return this.metrics;
     }
 
-    // 公有方法：销毁监控（组件卸载时调用，避免内存泄漏）
+    // 清理资源
     destroy() {
         if (this.rafId) {
-            cancelAnimationFrame(this.rafId); // 取消requestAnimationFrame
-            this.rafId = null; // 置空ID，便于垃圾回收
+            cancelAnimationFrame(this.rafId);
+            this.rafId = null;
         }
+        this.fpsHistory = [];
+        this.updateCallbacks.clear();
     }
 }
-// 动画调度器
+
+// ==================== 动画调度器 (优化版) ====================
+
 class AnimationScheduler {
     private static instance: AnimationScheduler;
-    private queue: Array<{ priority: number; callback: () => void }> = [];
+    private queue: Array<{ priority: number; callback: () => void; id: string }> = [];
     private isProcessing = false;
     private maxConcurrent = 5;
+    private activeAnimations = new Set<string>();
 
     private constructor() { }
 
@@ -201,9 +249,16 @@ class AnimationScheduler {
         return AnimationScheduler.instance;
     }
 
-    schedule(callback: () => void, priority: 'critical' | 'high' | 'normal' | 'low' = 'normal') {
+    schedule(callback: () => void, priority: 'critical' | 'high' | 'normal' | 'low' = 'normal', id?: string) {
         const priorityMap = { critical: 4, high: 3, normal: 2, low: 1 };
-        this.queue.push({ priority: priorityMap[priority], callback });
+        const animationId = id || `anim_${Date.now()}_${Math.random()}`;
+
+        // 避免重复调度
+        if (this.activeAnimations.has(animationId)) {
+            return;
+        }
+
+        this.queue.push({ priority: priorityMap[priority], callback, id: animationId });
         this.queue.sort((a, b) => b.priority - a.priority);
         this.process();
     }
@@ -219,8 +274,10 @@ class AnimationScheduler {
                 batch.map(
                     (item) =>
                         new Promise((resolve) => {
+                            this.activeAnimations.add(item.id);
                             requestAnimationFrame(() => {
                                 item.callback();
+                                this.activeAnimations.delete(item.id);
                                 resolve(undefined);
                             });
                         }),
@@ -241,233 +298,291 @@ class AnimationScheduler {
         };
         this.maxConcurrent = concurrencyMap[level];
     }
+
+    // 清理资源
+    clear() {
+        this.queue = [];
+        this.activeAnimations.clear();
+        this.isProcessing = false;
+    }
 }
 
-// ==================== 缓动函数库 ====================
+// ==================== Spring 动画配置库 ====================
 
+export const SPRING_PRESETS = {
+    gentle: { type: 'spring' as const, stiffness: 120, damping: 20, mass: 1 },
+    soft: { type: 'spring' as const, duration: 0.35, stiffness: 120, damping: 20 },
+    microRebound: { type: 'spring' as const, stiffness: 300, damping: 20 },
+    microDamping: { type: 'spring' as const, damping: 24 },
+    smooth: { type: 'spring' as const, stiffness: 180, damping: 25, mass: 0.8 },
+    snappy: { type: 'spring' as const, stiffness: 300, damping: 30, mass: 0.6 },
+    stiff: { type: 'spring' as const, stiffness: 400, damping: 35, mass: 0.5 },
+    bouncy: { type: 'spring' as const, stiffness: 260, damping: 12, mass: 1.2 },
+    floaty: { type: 'spring' as const, stiffness: 100, damping: 15, mass: 0.4 },
+    precise: { type: 'spring' as const, stiffness: 350, damping: 40, mass: 0.5 },
+    slow: { type: 'spring' as const, stiffness: 80, damping: 25, mass: 2 },
+    dropdown: { type: 'spring' as const, stiffness: 450, damping: 35, mass: 0.4 },
+    adaptive: (performanceLevel: PerformanceMetrics['level']) => {
+        const configs = {
+            ultra: { stiffness: 300, damping: 30, mass: 0.6 },
+            high: { stiffness: 250, damping: 28, mass: 0.7 },
+            medium: { stiffness: 200, damping: 25, mass: 0.8 },
+            low: { stiffness: 150, damping: 20, mass: 1 },
+            minimal: { stiffness: 100, damping: 15, mass: 1.2 },
+        };
+        return { type: 'spring' as const, ...configs[performanceLevel] };
+    },
+} as const;
+
+// 保留 cubic-bezier 缓动（作为降级方案）
 export const EASING = {
-    // 标准缓动
     linear: [0, 0, 1, 1],
     ease: [0.25, 0.1, 0.25, 1],
     easeIn: [0.42, 0, 1, 1],
     easeOut: [0, 0, 0.58, 1],
     easeInOut: [0.42, 0, 0.58, 1],
-
-    // 自定义缓动
     smooth: [0.25, 0.46, 0.45, 0.94],
     snappy: [0.4, 0, 0.2, 1],
-    bounce: [0.68, -0.55, 0.265, 1.55],
-
-    // 物理缓动
-    spring: { type: 'spring' as const, stiffness: 300, damping: 20 },
-    softSpring: { type: 'spring' as const, stiffness: 150, damping: 15 },
-    stiffSpring: { type: 'spring' as const, stiffness: 500, damping: 30 },
 } as const;
 
-// ==================== 动画变体库 ====================
+// ==================== 动画变体库 (基于 Spring) ====================
 
 export class AnimationVariants {
-    private static configs: Record<PerformanceMetrics['level'], AnimationConfig> = {
-        ultra: { duration: 0.6, ease: EASING.smooth, stagger: 0.08 },
-        high: { duration: 0.4, ease: EASING.smooth, stagger: 0.05 },
-        medium: { duration: 0.3, ease: EASING.snappy, stagger: 0.03 },
-        low: { duration: 0.2, ease: EASING.snappy, stagger: 0.02 },
-        minimal: { duration: 0.1, ease: EASING.linear, stagger: 0 },
+    // Spring 配置 - 根据性能等级选择合适的预设
+    private static springConfigs: Record<
+        PerformanceMetrics['level'],
+        { type: 'spring'; stiffness: number; damping: number; mass: number }
+    > = {
+            ultra: SPRING_PRESETS.smooth, // 最佳性能 - 流畅动画
+            high: SPRING_PRESETS.smooth, // 高性能 - 流畅动画
+            medium: SPRING_PRESETS.snappy, // 中等性能 - 快速动画
+            low: SPRING_PRESETS.stiff, // 低性能 - 强劲快速
+            minimal: { type: 'spring' as const, stiffness: 500, damping: 50, mass: 0.3 }, // 最低性能 - 极快
+        };
+
+    // Stagger 延迟配置
+    private static staggerConfigs: Record<PerformanceMetrics['level'], number> = {
+        ultra: 0.05,
+        high: 0.04,
+        medium: 0.03,
+        low: 0.02,
+        minimal: 0,
     };
 
-    static getConfig(level: PerformanceMetrics['level']): AnimationConfig {
-        return this.configs[level];
+    static getSpringConfig(level: PerformanceMetrics['level']) {
+        return this.springConfigs[level];
     }
 
-    // 淡入动画
+    static getStagger(level: PerformanceMetrics['level']) {
+        return this.staggerConfigs[level];
+    }
+
     static fadeIn(level: PerformanceMetrics['level']): Variants {
-        const config = this.getConfig(level);
-        if (level === 'minimal') {
+        const spring = level === 'minimal' ? this.springConfigs[level] : SPRING_PRESETS.gentle;
+        const shouldReduceMotion = level === 'minimal';
+
+        if (shouldReduceMotion) {
             return {
                 hidden: { opacity: 0 },
-                visible: { opacity: 1, transition: { duration: config.duration } },
+                visible: { opacity: 1, transition: { duration: 0.3, ease: 'easeOut' } },
             };
         }
+
         return {
-            hidden: { opacity: 0, y: 20 },
-            visible: {
-                opacity: 1,
-                y: 0,
-                transition: { duration: config.duration, ease: config.ease as any },
-            },
+            hidden: { opacity: 0, y: 20, scale: 0.98 },
+            visible: { opacity: 1, y: 0, scale: 1, transition: spring },
         };
     }
 
-    // 滑入动画
-    static slideIn(direction: 'left' | 'right' | 'top' | 'bottom', level: PerformanceMetrics['level']): Variants {
-        const config = this.getConfig(level);
-        const distance = level === 'minimal' ? 0 : 50;
-
-        const offsets = {
-            left: { x: -distance, y: 0 },
-            right: { x: distance, y: 0 },
-            top: { x: 0, y: -distance },
-            bottom: { x: 0, y: distance },
-        };
+    static slideIn(direction: 'left', level: PerformanceMetrics['level']): Variants {
+        const spring = level === 'minimal' ? this.springConfigs[level] : SPRING_PRESETS.smooth;
+        const distance = level === 'minimal' ? 0 : 40;
 
         return {
-            hidden: { opacity: 0, ...offsets[direction] },
-            visible: {
-                opacity: 1,
-                x: 0,
-                y: 0,
-                transition: { duration: config.duration, ease: config.ease as any },
-            },
+            hidden: { opacity: 0, x: -distance },
+            visible: { opacity: 1, x: 0, transition: spring },
         };
     }
 
-    // 缩放动画
-    static scale(level: PerformanceMetrics['level']): Variants {
-        const config = this.getConfig(level);
-        const scaleValue = level === 'minimal' ? 1 : 0.9;
-
-        return {
-            hidden: { opacity: 0, scale: scaleValue },
-            visible: {
-                opacity: 1,
-                scale: 1,
-                transition: { duration: config.duration, ease: config.ease as any },
-            },
-        };
-    }
-
-    // 交错容器
     static stagger(level: PerformanceMetrics['level']): Variants {
-        const config = this.getConfig(level);
+        const stagger = this.getStagger(level);
+        const delayChildren = level === 'minimal' ? 0 : 0.05;
 
         return {
             hidden: { opacity: 0 },
-            visible: {
-                opacity: 1,
-                transition: {
-                    staggerChildren: config.stagger,
-                    delayChildren: level === 'minimal' ? 0 : 0.1,
-                },
-            },
+            visible: { opacity: 1, transition: { staggerChildren: stagger, delayChildren } },
         };
     }
 
-    // 列表项动画
     static listItem(level: PerformanceMetrics['level']): Variants {
-        const config = this.getConfig(level);
+        const spring = level === 'minimal' ? this.springConfigs[level] : SPRING_PRESETS.snappy;
 
         if (level === 'minimal') {
-            return {
-                hidden: { opacity: 0 },
-                visible: { opacity: 1, transition: { duration: config.duration } },
-            };
-        }
-
         return {
-            hidden: { opacity: 0, x: -20 },
-            visible: {
+            hidden: { opacity: 0 },
+            visible: (custom: number) => ({
                 opacity: 1,
-                x: 0,
-                transition: { duration: config.duration, ease: config.ease as any },
-            },
+                transition: { duration: 0.3, ease: 'easeOut', delay: custom * 0.05 },
+            }),
         };
     }
 
-    // 卡片动画
+        // 移除 x 变换，只使用 opacity 和 scale，避免横向滚动和抖动
+        return {
+            hidden: { opacity: 0, scale: 0.98 },
+            visible: (custom: number) => ({
+                opacity: 1,
+                scale: 1,
+                transition: { ...spring, delay: custom * 0.05 },
+            }),
+        };
+    }
+
+    static listItemUp(level: PerformanceMetrics['level']): Variants {
+        const spring = level === 'minimal' ? this.springConfigs[level] : SPRING_PRESETS.microRebound;
+
+        return {
+            hidden: { opacity: 0, y: 20 },
+            visible: (custom: number) => ({ opacity: 1, y: 0, transition: { ...spring, delay: custom * 0.08 } }),
+        };
+    }
+
+    static listItemScale(level: PerformanceMetrics['level']): Variants {
+        const spring = level === 'minimal' ? this.springConfigs[level] : SPRING_PRESETS.bouncy;
+
+        return {
+            hidden: { opacity: 0, scale: 0.8 },
+            visible: (custom: number) => ({ opacity: 1, scale: 1, transition: { ...spring, delay: custom * 0.06 } }),
+        };
+    }
+
     static card(level: PerformanceMetrics['level']): Variants {
-        const config = this.getConfig(level);
+        const spring = level === 'minimal' ? this.springConfigs[level] : SPRING_PRESETS.gentle;
 
         if (level === 'minimal') {
             return {
                 hidden: { opacity: 0 },
-                visible: { opacity: 1, transition: { duration: config.duration } },
+                visible: { opacity: 1, transition: { duration: 0.3, ease: 'easeOut' } },
             };
         }
 
         return {
-            hidden: { opacity: 0, y: 15, scale: 0.95 },
-            visible: {
-                opacity: 1,
-                y: 0,
-                scale: 1,
-                transition: { duration: config.duration, ease: config.ease as any },
-            },
+            hidden: { opacity: 0, y: 20, scale: 0.96 },
+            visible: { opacity: 1, y: 0, scale: 1, transition: spring },
         };
     }
 
-    // 模态框动画
-    static modal(level: PerformanceMetrics['level']): Variants {
-        const config = this.getConfig(level);
+    static dropdown(level: PerformanceMetrics['level']): Variants {
+        const spring = level === 'minimal' ? this.springConfigs[level] : SPRING_PRESETS.dropdown;
 
         return {
-            hidden: { opacity: 0, scale: 0.95, y: 20 },
-            visible: {
-                opacity: 1,
-                scale: 1,
-                y: 0,
-                transition: { duration: config.duration, ease: config.ease as any },
-            },
-            exit: {
-                opacity: 0,
-                scale: 0.95,
-                y: 20,
-                transition: { duration: config.duration * 0.7 },
-            },
+            hidden: { opacity: 0, y: -10, scale: 0.95 },
+            visible: { opacity: 1, y: 0, scale: 1, transition: spring },
+            exit: { opacity: 0, y: -10, scale: 0.95, transition: { ...spring, damping: spring.damping! * 1.5 } },
+        };
+    }
+
+    static waveContainer(level: PerformanceMetrics['level']): Variants {
+        const stagger = level === 'minimal' ? 0 : 0.022;
+
+        return {
+            hidden: { opacity: 0 },
+            visible: { opacity: 1, transition: { staggerChildren: stagger, when: 'beforeChildren' } },
+        };
+    }
+
+    static waveChar(level: PerformanceMetrics['level']): Variants {
+        if (level === 'minimal') {
+        return {
+            hidden: { opacity: 0 },
+            visible: { opacity: 1, transition: this.springConfigs[level] },
+        };
+    }
+
+        return {
+            hidden: { y: '0.7em', opacity: 0 },
+            visible: { y: 0, opacity: 1, transition: { type: 'spring', stiffness: 380, damping: 24, mass: 0.5 } },
         };
     }
 }
-// 主 Hook
+
+// ==================== 主Hook ====================
+
 export const useAnimationEngine = () => {
     const monitor = useMemo(() => PerformanceMonitor.getInstance(), []);
-    const schedule = useMemo(() => AnimationScheduler.getInstance(), []);
+    const scheduler = useMemo(() => AnimationScheduler.getInstance(), []);
     const [metrics, setMetrics] = useState<PerformanceMetrics>(() => monitor.getMetrics());
 
+    // 订阅性能变化
     useEffect(() => {
-        // 每2s更新一下指标
+        const unsubscribe = monitor.subscribe((newMetrics) => {
+            setMetrics(newMetrics);
+            scheduler.updateConcurrency(newMetrics.level);
+        });
+
+        // 每2秒更新一次指标
         const interval = setInterval(() => {
             const newMetrics = monitor.getMetrics();
             setMetrics(newMetrics);
-            schedule.updateConcurrency(newMetrics.level);
+            scheduler.updateConcurrency(newMetrics.level);
         }, 2000);
-        return () => clearInterval(interval);
-    }, [monitor, schedule]);
 
-    // 获取动画变体
+        return () => {
+            clearInterval(interval);
+            unsubscribe();
+        };
+    }, [monitor, scheduler]);
+
+    // 获取动画变体 - 常用动画集合
     const variants = useMemo(
         () => ({
+            // 基础动画
             fadeIn: AnimationVariants.fadeIn(metrics.level),
             slideInLeft: AnimationVariants.slideIn('left', metrics.level),
-            slideInRight: AnimationVariants.slideIn('right', metrics.level),
-            slideInTop: AnimationVariants.slideIn('top', metrics.level),
-            slideInBottom: AnimationVariants.slideIn('bottom', metrics.level),
-            scale: AnimationVariants.scale(metrics.level),
+
+            // 容器和列表
             stagger: AnimationVariants.stagger(metrics.level),
             listItem: AnimationVariants.listItem(metrics.level),
+            listItemUp: AnimationVariants.listItemUp(metrics.level),
+            listItemScale: AnimationVariants.listItemScale(metrics.level),
             card: AnimationVariants.card(metrics.level),
-            modal: AnimationVariants.modal(metrics.level),
+
+            // 下拉菜单
+            dropdown: AnimationVariants.dropdown(metrics.level),
+
+            // 波浪文字动画
+            waveContainer: AnimationVariants.waveContainer(metrics.level),
+            waveChar: AnimationVariants.waveChar(metrics.level),
         }),
         [metrics.level],
     );
+
     // 调度动画
     const scheduleAnimation = useCallback(
-        (callback: () => void, priority: 'critical' | 'high' | 'normal' | 'low' = 'normal') => {
-            schedule.schedule(callback, priority);
+        (callback: () => void, priority: 'critical' | 'high' | 'normal' | 'low' = 'normal', id?: string) => {
+            scheduler.schedule(callback, priority, id);
         },
-        [schedule],
+        [scheduler],
     );
-    // 获取配置
-    const config = useMemo(() => AnimationVariants.getConfig(metrics.level), [metrics.level]);
-    // 悬停动画
+
+    // 获取 Spring 配置
+    const springConfig = useMemo(() => AnimationVariants.getSpringConfig(metrics.level), [metrics.level]);
+
+    // 悬停动画配置 - 使用 Spring
     const hoverProps = useMemo(() => {
         if (metrics.level === 'minimal' || metrics.prefersReducedMotion) {
             return {};
         }
+
+        const spring = SPRING_PRESETS.snappy;
+
         return {
             whileHover: { scale: 1.02, y: -2 },
             whileTap: { scale: 0.98 },
-            transition: { duration: 0.2 }
-        }
+            transition: spring,
+        };
     }, [metrics.level, metrics.prefersReducedMotion]);
+
     return {
         // 性能指标
         metrics,
@@ -478,22 +593,112 @@ export const useAnimationEngine = () => {
         // 动画变体
         variants,
 
-        // 动画配置
-        config,
+        // Spring 动画配置
+        springConfig,
+        springPresets: SPRING_PRESETS,
+
+        // 降级缓动配置
         easing: EASING,
 
         // 工具方法
         scheduleAnimation,
         hoverProps,
     };
+};
 
-}
+/**
+ * 智能视口检测 Hook
+ * 支持LCP优化、刷新位置保持、自动清理
+ */
+export const useSmartInView = (options?: { once?: boolean; amount?: number; lcpOptimization?: boolean }) => {
+    const ref = useRef<HTMLElement>(null);
+    const controls = useAnimation();
+    const [shouldAnimate, setShouldAnimate] = useState(false);
+    const [isInitialCheck, setIsInitialCheck] = useState(true);
+
+    // framer-motion 的视口检测
+    const isInView = useInView(ref, {
+        once: options?.once ?? true,
+        amount: options?.amount ?? 0.2,
+        margin: '0px 0px -10% 0px', // 提前触发动画
+    });
+
+    const lcpOptimization = options?.lcpOptimization ?? false;
+
+    useEffect(() => {
+        if (!ref.current || !isInitialCheck) return;
+
+        const element = ref.current;
+        const rect = element.getBoundingClientRect();
+        const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+
+        const isVisible = rect.top < windowHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+
+        if (isVisible) {
+            if (lcpOptimization && !getIsHydrationComplete()) {
+                controls.start('visible');
+                setShouldAnimate(true);
+            } else {
+                setShouldAnimate(true);
+            }
+        }
+
+        setIsInitialCheck(false);
+    }, [isInitialCheck, controls, lcpOptimization]);
+
+    useEffect(() => {
+        if (isInView && !isInitialCheck) {
+            setShouldAnimate(true);
+            controls.start('visible');
+        }
+    }, [isInView, isInitialCheck, controls]);
+
+    return { ref, controls, isInView: shouldAnimate };
+};
+
+export const useInViewOnce = (options?: { amount?: number }) => {
+    const ref = useRef<HTMLElement>(null);
+    const [isVisible, setIsVisible] = useState(false);
+
+    const isInView = useInView(ref, {
+        once: true,
+        amount: options?.amount ?? 0.2,
+        margin: '0px 0px -10% 0px',
+    });
+
+    useEffect(() => {
+        if (!ref.current || isVisible) return;
+
+        const element = ref.current;
+        const rect = element.getBoundingClientRect();
+        const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+
+        if (rect.top < windowHeight && rect.bottom > 0) {
+            setIsVisible(true);
+        }
+    }, [isVisible]);
+
+    useEffect(() => {
+        if (isInView && !isVisible) {
+            setIsVisible(true);
+        }
+    }, [isInView, isVisible]);
+
+    return { ref, isVisible };
+};
 
 // ==================== 导出 ====================
 
 export default {
     useAnimationEngine,
+    useSmartInView,
+    useInViewOnce,
+    HydrationDetector,
+    getIsHydrationComplete,
+    markHydrationComplete,
+    onHydrationComplete,
     AnimationVariants,
+    SPRING_PRESETS,
     EASING,
     PerformanceMonitor,
     AnimationScheduler,

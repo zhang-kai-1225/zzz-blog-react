@@ -6,6 +6,8 @@ import '@/styles/index.css'
 import App from './App.tsx'
 import { initializeTheme } from './store/modules/themeSlice'
 import { ToastProvider, ToastListener, initAdnaanUI } from 'adnaan-ui';
+import AccentColorStyleInjector from './theme/theme-color';
+
 // 初始化Adnaan UI
 initAdnaanUI();
 // 初始化主题
@@ -15,6 +17,7 @@ const init = async () => {
   createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <Provider store={store}>
+        <AccentColorStyleInjector />
         <ToastProvider>
           <ToastListener />
           <App />
