@@ -1,11 +1,13 @@
 import Icon from "@/components/common/Icon"
 import WaveText from "@/components/common/wave-text"
-import { useAnimationEngine } from "@/utils/animation-engine"
+import { useAnimationEngine, useSmartInView } from "@/utils/animation-engine"
 import styled from "@emotion/styled"
-import { motion } from "framer-motion"
-import { useState } from "react"
+import { motion, Variants } from "framer-motion"
+import { useEffect, useState } from "react"
 import { FiCode, FiGithub, FiMail } from "react-icons/fi"
 import { useSiteSettings } from "@/layouts/hook.ts";
+import { ArticlesSection } from "./modules/article-notes-section"
+import API from "@/utils/api"
 
 
 
@@ -15,58 +17,71 @@ const PageContainer = styled.div`
     margin: 0 auto;
     padding: 0 1rem;
 `
+const HeroSection = styled.div`
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+
+  @media (max-width: 768px) {
+    padding-bottom: 2rem;
+  }
+`;
 const Hero = styled(motion.div)`
-   width: 100%;
-   display: flex;
-   justify-content: center;
-   align-items: center;
-   position: relative;
-   flex:1;
-   @media (max-width: 768px) {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  flex: 1;
+
+  @media (max-width: 768px) {
     flex-direction: column;
     gap: 2rem;
-    margin-bottom:2rem
-   }
+    margin-bottom: 2rem;
+  }
 `
 const HeroContent = styled(motion.div)`
-    max-width: 800px;
-    position: relative;
-    z-index: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 1rem 0;
+  max-width: 800px;
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 0;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: -10px;
+    left: -30px;
+    width: 80px;
+    height: 80px;
+    background: radial-gradient(circle, var(--accent-color-alpha) 0%, transparent 70%);
+    border-radius: 50%;
+    opacity: 0.6;
+    z-index: -1;
+    filter: blur(10px);
+  }
+
+  @media (max-width: 768px) {
+    max-width: 100%;
+    text-align: center;
+    order: 2;
+    padding: 0;
 
     &::before {
-        content: '';
-        position: absolute;
-        top: -10px;
-        left: -30px;
-        width: 80px;
-        height: 80px;
-        background: radial-gradient(circle, var(--accent-color) 0%, transparent 70%);
-        border-radius: 50%;
-        z-index: -1;
-        opacity: 0.5;
-        filter: blur(20px);
+      left: 50%;
+      transform: translateX(-50%);
     }
-    @media(max-width: 768px) {
-        max-width: 100%;
-        text-align:center;
-        order: 2;
-        padding: 0 ;
 
-        &::before {
-            left: 50%;
-            transform: translateX(-50%);
-        }
-        &::after {
-            right: 50%;
-            transform: translateX(50%);
-            width: 120px;
-            height: 120px;
-        }
+    &::after {
+      right: 50%;
+      transform: translateX(50%);
+      width: 120px;
+      height: 120px;
     }
+  }
 `
 const Title = styled.h1`
     font-size: 2.4rem;
@@ -249,46 +264,53 @@ const SocialLink = styled(motion.a)`
 `;
 
 const HeroImage = styled(motion.div)`
-    width: 200px;
-    height: 200px;
-    border-radius: 50%;
-    overflow: hidden;
-    position: relative;
-    z-index: 1;
+  width: 320px;
+  height: 450px;
+  position: relative;
+  z-index: 1;
+  perspective: 1000px;
+  perspective-origin: center center;
+
+  @media (max-width: 768px) {
+    width: 280px;
+    height: 380px;
+    order: 1;
+    margin-bottom: 1rem;
+  }
 `
 
 const ProfileCard = styled(motion.div)`
-     width: 100%;
-  height: 100%;
-  position: relative;
-  transform-style: preserve-3d;
-  transform-origin: center center;
-  transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  border-radius: 16px;
-  box-shadow:
-    0 8px 32px rgba(var(--accent-rgb), 0.2),
-    0 4px 16px rgba(0, 0, 0, 0.1),
-    0 0 0 1px rgba(255, 255, 255, 0.1);
-  cursor: pointer;
-  will-change: transform;
-
-  &:hover:not(.flipped) {
-    transform: translateY(-8px);
+    width: 100%;
+    height: 100%;
+    position: relative;
+    transform-style: preserve-3d;
+    transform-origin: center center;
+    transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border-radius: 16px;
     box-shadow:
-      0 16px 48px rgba(var(--accent-rgb), 0.3),
-      0 8px 24px rgba(0, 0, 0, 0.15),
-      0 0 0 1px rgba(255, 255, 255, 0.2);
-  }
+        0 8px 32px rgba(var(--accent-rgb), 0.2),
+        0 4px 16px rgba(0, 0, 0, 0.1),
+        0 0 0 1px rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    will-change: transform;
 
-  &.flipped {
-    transform: rotateY(180deg);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    &.flipped {
-      transform: rotateY(180deg);
+    &:hover:not(.flipped) {
+        transform: translateY(-8px);
+        box-shadow:
+        0 16px 48px rgba(var(--accent-rgb), 0.3),
+        0 8px 24px rgba(0, 0, 0, 0.15),
+        0 0 0 1px rgba(255, 255, 255, 0.2);
     }
-  }
+
+    &.flipped {
+        transform: rotateY(180deg);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        &.flipped {
+        transform: rotateY(180deg);
+        }
+    }
 `
 const CardFace = styled.div`
   position: absolute;
@@ -300,30 +322,108 @@ const CardFace = styled.div`
   overflow: hidden;
 `;
 const CardFront = styled(CardFace)`
-    width: 100%;
-    height: 100%;
-    background-color: var(--bg-secondary);
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    color: var(--text-secondary);
-    border: 1px solid var(--border-color);
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    padding: 1.5rem 1rem;
+    transform: rotateY(0deg);
 `
 const CardBack = styled(CardFace)`
-    width: 100%;
-    height: 100%;
-    background-color: var(--bg-secondary);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-secondary);
-    border: 1px solid var(--border-color);
-    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     transform: rotateY(180deg);
+    display: flex;
+    flex-direction: column;
 `
+const CardBackContent = styled.div`
+  padding: 1.2rem 1rem;
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: rgba(var(--accent-rgb), 0.3);
+    border-radius: 2px;
+
+    &:hover {
+      background: rgba(var(--accent-rgb), 0.5);
+    }
+  }
+`;
+
+const CardTitle = styled.h4`
+  font-size: 1.1rem;
+  margin-bottom: 0.8rem;
+  color: var(--text-primary);
+  position: relative;
+  padding-bottom: 0.4rem;
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 40px;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent-color), transparent);
+    border-radius: 3px;
+  }
+`;
+const SkillList = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.7rem;
+  margin-bottom: 1.5rem;
+`;
+
+const SkillItem = styled.span`
+  font-size: 0.8rem;
+  padding: 0.3rem 0.6rem;
+  background: rgba(var(--accent-rgb), 0.12);
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
+  border-radius: 6px;
+  color: var(--accent-color);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow:
+    0 2px 8px rgba(var(--accent-rgb), 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &:hover {
+    background: rgba(var(--accent-rgb), 0.18);
+    transform: translateY(-1px);
+    box-shadow:
+      0 4px 12px rgba(var(--accent-rgb), 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.4);
+  }
+
+  [data-theme='dark'] & {
+    background: rgba(var(--accent-rgb), 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+
+    &:hover {
+      background: rgba(var(--accent-rgb), 0.22);
+      box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    }
+  }
+`;
 const ProfileImage = styled.div`
-  width: 100px;
+ width: 100px;
   height: 100px;
   border-radius: 50%;
   overflow: hidden;
@@ -352,11 +452,148 @@ const ProfileImage = styled.div`
       inset 0 2px 4px rgba(255, 255, 255, 0.15);
   }
 `;
+const ProfileName = styled.h3`
+  font-size: 1.3rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  background: linear-gradient(90deg, var(--accent-color), var(--accent-color-assistant));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-align: center;
+`;
+
+const ProfileTitle = styled.div`
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 1.2rem;
+  text-align: center;
+`;
+
+const ProfileInfoList = styled.div`
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+`;
+
+const ProfileInfoItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px dashed var(--border-color);
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  span:first-of-type {
+    color: var(--text-secondary);
+  }
+
+  span:last-of-type {
+    color: var(--text-primary);
+    font-weight: 500;
+  }
+`;
+const CardFlipHint = styled.div`
+  position: absolute;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  opacity: 0.7;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+`;
+const Quote = styled(motion.div)`
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 0.9rem;
+  opacity: 0.8;
+  text-align: center;
+  padding: 1rem 0;
+  margin-bottom: 0.5rem;
+`;
+const ScrollIndicator = styled(motion.div)`
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1.5rem;
+    width: 100%;
+    color: var(--text-secondary);
+    opacity: 0.8;
+    border-bottom: 1px dashed var(--border-color);
+    padding-bottom: 5rem;
+    svg {
+        width: 28px;
+        height: 40px;
+    }
+    @media (max-width: 768px) {
+        margin-bottom: 2rem;
+        padding-bottom: 2rem;
+        svg {
+        width: 24px;
+        height: 32px;
+        }
+  }
+`
+const mouseScrollVariants: Variants = {
+    initial: { opacity: 0.5, y: 0 },
+    animate: {
+        opacity: [0.5, 1, 0.5],
+        y: [0, 5, 0],
+        transition: {
+            repeat: Infinity,
+            duration: 3,
+            ease: [0.4, 0, 0.2, 1],
+        },
+    },
+};
+const scrollWheelVariants: Variants = {
+    // initial: { opacity: 0.5, scaleY: 1 },
+    // animate: {
+    //     opacity: [0.5, 1, 0.5],
+    //     scaleY: [1, 0.7, 1],
+    //     transition: {
+    //         repeat: Infinity,
+    //         duration: 1.5,
+    //         ease: [0.4, 0, 0.2, 1],
+    //         delay: 0.2,
+    //     },
+    // },
+};
+
+const TwoColumnContainer = styled(motion.div)`
+    display:grid;
+    grid-template-columns: 1fr 400px;
+    gap: 4rem;
+`
+const LeftColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+`;
+
+const RightColumn = styled.div`
+  display: flex;
+  flex-direction: column;
+  position: relative;
+`;
 const Home: React.FC = () => {
     // 使用动画引擎， 统一的Spring动画系统
     const { variants, springPresets } = useAnimationEngine();
     // 卡片是否翻转
     const [isFlipped, setIsFlipped] = useState(false);
+    // 使用智能视口检测 - 优化两栏布局动画
+    const twoColumnView = useSmartInView({ amount: 0.2, lcpOptimization: true });
     // 按行显示控制
     const [showLine1, setShowLine1] = useState(true);
     const [showLine2, setShowLine2] = useState(false);
@@ -366,6 +603,38 @@ const Home: React.FC = () => {
 
     // 使用网站设置Hook - 增加加载状态检查
     const { siteSettings, loading: siteSettingsLoading } = useSiteSettings();
+    // 文章和手记记录
+    const [articles, setArticles] = useState<any[]>([]);
+    const [notes, setNotes] = useState<any[]>([]);
+
+    // 加载文章列表
+    const loadArticles = async () => {
+        try {
+            const response = await API.article.getArticles({
+                page: 1,
+                limit: 3,
+            });
+            setArticles(response.data || []);
+        } catch (error) {
+            console.error('加载文章列表失败:', error);
+        }
+    }
+
+    // 初始数据加载
+    useEffect(() => {
+        // 组件挂载时加载文章列表,防止内存泄漏（组件卸载后，异步操作（如数据请求）仍继续执行并尝试更新组件状态）
+        let isMounted = true;
+        const initialize = async () => {
+            if (!isMounted) return;
+            await loadArticles();
+        }
+        initialize();
+        return () => {
+            isMounted = false;
+        }
+    }, [])
+
+
 
 
 
@@ -377,7 +646,8 @@ const Home: React.FC = () => {
     return (
         <>
             <PageContainer>
-                <Hero>
+                <HeroSection>
+                    <Hero>
                     <HeroContent>
                         {/** 标题 */}
                         <Title>
@@ -608,23 +878,141 @@ const Home: React.FC = () => {
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         transition={springPresets.bouncy}>
                         <ProfileCard className={isFlipped ? 'flipped' : ''} onClick={handleCardFlip}>
-                            <CardFront>
-                                <ProfileImage>
-                                    <img
-                                        src="https://foruda.gitee.com/avatar/1745582574310382271/5352827_adnaan_1745582574.png!avatar100"
-                                        alt={siteSettings?.authorName || '头像'}
-                                    />
-                                </ProfileImage>
+                                <CardFront className=" glass glass-highlight">
+                                    <ProfileImage>
+                                        <img
+                                            src="https://foruda.gitee.com/avatar/1745582574310382271/5352827_adnaan_1745582574.png!avatar100"
+                                            alt={siteSettings?.authorName || '头像'}
+                                        />
+                                    </ProfileImage>
+                                    <ProfileName>{siteSettings?.authorName || ''}</ProfileName>
+                                    <ProfileTitle>{siteSettings?.authorTitle || ''}</ProfileTitle>
 
-                            </CardFront>
-                            <CardBack>
+                                    <ProfileInfoList>
+                                        {siteSettings?.mbti && (
+                                            <ProfileInfoItem>
+                                                <span>MBTI</span>
+                                                <span>{siteSettings.mbti}</span>
+                                            </ProfileInfoItem>
+                                        )}
+                                        {siteSettings?.location && (
+                                            <ProfileInfoItem>
+                                                <span>地点</span>
+                                                <span>{siteSettings.location}</span>
+                                            </ProfileInfoItem>
+                                        )}
+                                        {siteSettings?.occupation && (
+                                            <ProfileInfoItem>
+                                                <span>职业</span>
+                                                <span>{siteSettings.occupation}</span>
+                                            </ProfileInfoItem>
+                                        )}
+                                        {siteSettings?.skills && siteSettings.skills.length > 0 && (
+                                            <ProfileInfoItem>
+                                                <span>技能</span>
+                                                <span>{siteSettings.skills.join(', ')}</span>
+                                            </ProfileInfoItem>
+                                        )}
+                                    </ProfileInfoList>
+                                    <CardFlipHint>
+                                        <svg
+                                            viewBox="0 0 24 24"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            strokeWidth="2"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                        >
+                                            <path d="M7 16l-4-4m0 0l4-4m-4 4h18"></path>
+                                        </svg>
+                                        点击翻转
+                                    </CardFlipHint>
 
-                            </CardBack>
+                                </CardFront>
+                                <CardBack className="glass glass-highlight">
+                                    <CardBackContent>
+                                        <CardTitle>关于我</CardTitle>
+                                        <p
+                                            style={{
+                                                fontSize: '0.85rem',
+                                                lineHeight: '1.5',
+                                                marginBottom: '0.8rem',
+                                                color: 'var(--text-secondary)',
+                                            }}
+                                        >
+                                            {siteSettings?.authorBio || ''}
+                                        </p>
+
+                                        <CardTitle>技能标签</CardTitle>
+                                        <SkillList>
+                                            {siteSettings?.skills?.map((skill, index) => (
+                                                <SkillItem key={index}>{skill}</SkillItem>
+                                            ))}
+                                        </SkillList>
+
+                                        <CardFlipHint>
+                                            <svg
+                                                viewBox="0 0 24 24"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                strokeWidth="2"
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                            >
+                                                <path d="M17 8l4 4m0 0l-4 4m4-4H3"></path>
+                                            </svg>
+                                            返回正面
+                                        </CardFlipHint>
+                                    </CardBackContent>
+                                </CardBack>
                         </ProfileCard>
 
                     </HeroImage>
 
                 </Hero>
+
+                    <Quote
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 0.8 }}
+                        transition={{ ...springPresets.floaty, delay: 0.5 }}
+                    >
+                        {siteSettings?.quote || ''} {siteSettings?.quoteAuthor && `—— ${siteSettings.quoteAuthor}`}
+                    </Quote>
+                    {/**滚动指示器 */}
+                    <ScrollIndicator>
+                        <motion.div
+                            initial="initial"
+                            animate="animate"
+                            variants={mouseScrollVariants}
+                        >
+                            <svg viewBox="0 0 28 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <rect x="1" y="1" width="26" height="38" rx="13" stroke="currentColor" strokeWidth="2" />
+                                <motion.rect
+                                    x="12"
+                                    y="10"
+                                    width="4"
+                                    height="8"
+                                    rx="2"
+                                    fill="currentColor"
+                                    variants={scrollWheelVariants}
+                                />
+                            </svg>
+
+                        </motion.div>
+
+                    </ScrollIndicator>
+                </HeroSection>
+
+                {/** 两栏布局容器 */}
+                <TwoColumnContainer initial="hidden" animate={twoColumnView.isInView ? 'visible' : 'hidden'}>
+                    <LeftColumn>
+                        <ArticlesSection articles={articles} loading={false} />
+                    </LeftColumn>
+                    <RightColumn>
+                        右侧内容
+                    </RightColumn>
+                </TwoColumnContainer>
+
             </PageContainer>
         </>
     )
